@@ -21,7 +21,35 @@ npm install react-native-vision-camera-mrz
 
 ## Usage
 
-Coming soon. The API will be a `useMrzScanner()` hook plus a drop-in `<MrzScanner />` component.
+The camera API (`useMrzScanner()` hook and drop-in `<MrzScanner />` component) is coming soon.
+
+### Parsing an MRZ
+
+`parseMrz` validates and parses MRZ text from any source, such as OCR output or manual entry. It cleans up OCR noise (case, spaces, look-alike characters such as `O`/`0` in date fields) and never throws.
+
+```ts
+import { parseMrz } from 'react-native-vision-camera-mrz';
+
+const result = parseMrz([
+  'P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<',
+  'L898902C36UTO7408122F1204159ZE184226B<<<<<10',
+]);
+
+if (!result.ok) {
+  // Not a supported MRZ: result.error.code, e.g. 'UNSUPPORTED_FORMAT'
+} else if (!result.valid) {
+  // Read, but a check digit or value is wrong: result.issues
+} else {
+  result.fields.surname; // 'ERIKSSON'
+  result.fields.givenNames; // 'ANNA MARIA'
+  result.fields.documentNumber; // 'L898902C3'
+  result.fields.dateOfBirth.iso; // '1974-08-12'
+}
+```
+
+Two-digit years are resolved against today: birth dates take the most recent year that isn't in the future, and expiry dates may be up to 20 years ahead. Pass `{ referenceDate }` for reproducible results.
+
+> The result contains personal data. Don't log it or send it anywhere without the document holder's consent.
 
 ## Supported documents
 
