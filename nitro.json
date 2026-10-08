@@ -1,0 +1,23 @@
+{
+  "cxxNamespace": ["visioncameramrz"],
+  "ios": {
+    "iosModuleName": "VisionCameraMrz"
+  },
+  "android": {
+    "androidNamespace": ["visioncameramrz"],
+    "androidCxxLibName": "visioncameramrz"
+  },
+  "autolinking": {
+    "VisionCameraMrz": {
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "VisionCameraMrz"
+      },
+      "android": {
+        "language": "kotlin",
+        "implementationClassName": "VisionCameraMrz"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}
