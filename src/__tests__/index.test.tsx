@@ -6,17 +6,12 @@ jest.mock('react-native-nitro-modules', () => ({
 }));
 
 describe('public API', () => {
-  it('exports the parser and the plugin factory', () => {
-    expect(typeof library.parseMrz).toBe('function');
-    expect(typeof library.computeCheckDigit).toBe('function');
-    expect(typeof library.createMrzPlugin).toBe('function');
-  });
-
-  it('does not expose internal helpers', () => {
+  it('exports exactly the documented functions', () => {
     expect(Object.keys(library).sort()).toEqual([
       'computeCheckDigit',
-      'createMrzPlugin',
+      'createMrzTextRecognizer',
       'parseMrz',
+      'useMrzTextRecognizer',
     ]);
   });
 });

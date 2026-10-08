@@ -21,7 +21,36 @@ npm install react-native-vision-camera-mrz
 
 ## Usage
 
-The camera API (`useMrzScanner()` hook and drop-in `<MrzScanner />` component) is coming soon.
+A ready-made `useMrzScanner()` hook and drop-in `<MrzScanner />` component are coming soon. Until then, combine the two building blocks below.
+
+### Reading text in a frame processor
+
+`useMrzTextRecognizer` reads text on-device: Apple Vision on iOS, ML Kit with a bundled model on Android (works offline, no download on first launch).
+
+```tsx
+import { useFrameOutput } from 'react-native-vision-camera';
+import { useMrzTextRecognizer } from 'react-native-vision-camera-mrz';
+
+const recognizer = useMrzTextRecognizer({
+  // Normalized (0-1) region of the upright frame; only text inside is returned.
+  regionOfInterest: { x: 0, y: 0.55, width: 1, height: 0.3 },
+});
+
+const frameOutput = useFrameOutput({
+  pixelFormat: 'yuv',
+  onFrame(frame) {
+    'worklet';
+    try {
+      const lines = recognizer.recognizeText(frame); // [{ text, boundingBox }]
+      // Send `lines` to JS with scheduleOnRN(...) and pass them to parseMrz.
+    } finally {
+      frame.dispose();
+    }
+  },
+});
+```
+
+Lines come back in reading order. Bounding boxes are normalized to the upright frame (origin top-left, not mirrored).
 
 ### Parsing an MRZ
 

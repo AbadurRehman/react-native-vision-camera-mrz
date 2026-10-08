@@ -1,23 +1,29 @@
 {
-  "cxxNamespace": ["visioncameramrz"],
+  "cxxNamespace": [
+    "visioncameramrz"
+  ],
   "ios": {
     "iosModuleName": "VisionCameraMrz"
   },
   "android": {
-    "androidNamespace": ["visioncameramrz"],
+    "androidNamespace": [
+      "visioncameramrz"
+    ],
     "androidCxxLibName": "visioncameramrz"
   },
   "autolinking": {
-    "VisionCameraMrz": {
+    "MrzTextRecognizerFactory": {
       "ios": {
         "language": "swift",
-        "implementationClassName": "VisionCameraMrz"
+        "implementationClassName": "HybridMrzTextRecognizerFactory"
       },
       "android": {
         "language": "kotlin",
-        "implementationClassName": "VisionCameraMrz"
+        "implementationClassName": "HybridMrzTextRecognizerFactory"
       }
     }
   },
-  "ignorePaths": ["**/node_modules"]
+  "ignorePaths": [
+    "**/node_modules"
+  ]
 }

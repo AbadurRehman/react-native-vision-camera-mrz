@@ -120,4 +120,12 @@ dependencies {
 
   // VisionCamera v5: HybridFrameSpec / NativeFrame
   implementation project(":react-native-vision-camera")
+
+  // ImageProxy, the type of VisionCamera frames on Android. The app already
+  // gets CameraX through VisionCamera, so this is only needed to compile.
+  compileOnly "androidx.camera:camera-core:1.7.0-alpha03"
+
+  // On-device text recognition with the Latin model bundled into the app,
+  // so it works offline and on first launch (no Play Services download).
+  implementation "com.google.mlkit:text-recognition:16.0.1"
 }
