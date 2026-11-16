@@ -1,19 +1,48 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   MrzScanner,
   type MrzDate,
   type MrzScanResult,
+  type MrzScanStatus,
   type MrzScannerHandle,
 } from 'react-native-vision-camera-mrz';
 
+interface Scan {
+  result: MrzScanResult;
+  /** Seconds from the MRZ first coming into view to the confirmed result. */
+  seconds: number | undefined;
+}
+
 export default function App() {
   const scanner = useRef<MrzScannerHandle>(null);
-  const [result, setResult] = useState<MrzScanResult>();
+  const [scan, setScan] = useState<Scan>();
+  const [error, setError] = useState<string>();
   const [showMrzBoxes, setShowMrzBoxes] = useState(true);
+  // When an MRZ first came into view in the current scan.
+  const readingStartedAt = useRef<number>(undefined);
+
+  const handleStatusChange = useCallback((status: MrzScanStatus) => {
+    if (status === 'reading' && readingStartedAt.current === undefined) {
+      readingStartedAt.current = performance.now();
+    }
+  }, []);
+
+  const handleResult = useCallback((result: MrzScanResult) => {
+    const startedAt = readingStartedAt.current;
+    setScan({
+      result,
+      seconds:
+        startedAt === undefined
+          ? undefined
+          : (performance.now() - startedAt) / 1000,
+    });
+  }, []);
 
   const scanAgain = () => {
-    setResult(undefined);
+    readingStartedAt.current = undefined;
+    setScan(undefined);
+    setError(undefined);
     scanner.current?.reset();
   };
 
@@ -22,8 +51,9 @@ export default function App() {
       <MrzScanner
         ref={scanner}
         style={StyleSheet.absoluteFill}
-        onResult={setResult}
-        onError={(error) => console.warn('MRZ scanner error:', error.message)}
+        onResult={handleResult}
+        onStatusChange={handleStatusChange}
+        onError={(scanError) => setError(scanError.message)}
         showMrzBoxes={showMrzBoxes}
         fallback={<PermissionMessage />}
       />
@@ -37,21 +67,30 @@ export default function App() {
           {showMrzBoxes ? 'Hide MRZ boxes' : 'Show MRZ boxes'}
         </Text>
       </Pressable>
-      {result !== undefined && (
-        <ResultCard result={result} onScanAgain={scanAgain} />
+      {error !== undefined && scan === undefined && (
+        <Pressable
+          accessibilityRole="alert"
+          onPress={() => setError(undefined)}
+          style={styles.errorBanner}
+        >
+          <Text style={styles.errorText} numberOfLines={3}>
+            {error}
+          </Text>
+        </Pressable>
       )}
+      {scan !== undefined && <ResultCard scan={scan} onScanAgain={scanAgain} />}
     </View>
   );
 }
 
 function ResultCard({
-  result,
+  scan,
   onScanAgain,
 }: {
-  result: MrzScanResult;
+  scan: Scan;
   onScanAgain: () => void;
 }) {
-  const { fields } = result;
+  const { fields } = scan.result;
   const rows: Array<[string, string]> = [
     ['Surname', fields.surname],
     ['Given names', fields.givenNames || '—'],
@@ -65,6 +104,9 @@ function ResultCard({
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>✓ Passport scanned</Text>
+      {scan.seconds !== undefined && (
+        <Text style={styles.cardMeta}>Read in {scan.seconds.toFixed(1)} s</Text>
+      )}
       {rows.map(([label, value]) => (
         <View key={label} style={styles.row}>
           <Text style={styles.label}>{label}</Text>
@@ -139,7 +181,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1e7e34',
+  },
+  cardMeta: {
+    color: '#57606a',
+    fontSize: 13,
     marginBottom: 4,
+  },
+  errorBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 120,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(180, 35, 24, 0.9)',
+  },
+  errorText: {
+    color: 'white',
+    fontSize: 13,
   },
   row: {
     flexDirection: 'row',

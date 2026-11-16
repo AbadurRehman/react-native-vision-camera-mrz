@@ -66,6 +66,12 @@ export interface MrzScannerProps {
    */
   onError?: (error: Error) => void;
   /**
+   * Called with the current status and whenever it changes: `searching` (no
+   * MRZ in view), `reading` (an MRZ is in view but not confirmed yet) or
+   * `done`. Useful for haptics or for measuring how long scans take.
+   */
+  onStatusChange?: (status: MrzScanStatus) => void;
+  /**
    * Set to `false` to pause the camera, e.g. while the screen is not visible.
    * @default true
    */
@@ -106,6 +112,7 @@ export interface MrzScannerProps {
 export function MrzScanner({
   onResult,
   onError,
+  onStatusChange,
   isActive = true,
   style,
   labels,
@@ -152,9 +159,9 @@ export function MrzScanner({
   }, [guide, viewSize, frameSize]);
 
   // The latest callbacks, without restarting the camera when they change.
-  const callbacks = useRef({ onResult, onError });
+  const callbacks = useRef({ onResult, onError, onStatusChange });
   useEffect(() => {
-    callbacks.current = { onResult, onError };
+    callbacks.current = { onResult, onError, onStatusChange };
   });
 
   const handleResult = useCallback((result: MrzScanResult) => {
@@ -184,6 +191,10 @@ export function MrzScanner({
     agreementWindow,
   });
   const { status, mrzBoxes, frameSize: scannedFrameSize } = scanner.state;
+
+  useEffect(() => {
+    callbacks.current.onStatusChange?.(status);
+  }, [status]);
 
   useEffect(() => {
     if (scannedFrameSize !== undefined) {

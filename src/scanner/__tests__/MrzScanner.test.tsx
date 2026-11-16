@@ -124,6 +124,20 @@ describe('MrzScanner', () => {
     expect(mockCameraProps?.isActive).toBe(false);
   });
 
+  it('reports each status change once', async () => {
+    const onStatusChange = jest.fn();
+    await renderScanner({ onStatusChange });
+    await fireEvent.layout(screen.getByTestId('scanner'), LAYOUT);
+    await sendFrame();
+    await sendFrame();
+    await sendFrame();
+    expect(onStatusChange.mock.calls.map(([status]) => status)).toEqual([
+      'searching',
+      'reading',
+      'done',
+    ]);
+  });
+
   it('scans again after reset through its ref', async () => {
     const ref = createRef<MrzScannerHandle>();
     const { onResult } = await renderScanner({
