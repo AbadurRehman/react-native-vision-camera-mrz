@@ -8,8 +8,9 @@ import { MrzScanner, type MrzScannerHandle } from '../MrzScanner';
 
 interface CameraProps {
   isActive: boolean;
-  torchMode: 'on' | 'off';
+  torchMode: 'on' | 'off' | undefined;
   outputs: unknown[];
+  onError: (error: Error) => void;
 }
 
 let mockPermission = {
@@ -153,13 +154,64 @@ describe('MrzScanner', () => {
     expect(screen.queryAllByTestId('scanner-mrz-line')).toHaveLength(0);
   });
 
+  it('sends no torch command until the light is used', async () => {
+    // Android rejects torch commands sent before the camera has started.
+    await renderScanner();
+    expect(mockCameraProps).toHaveProperty('torchMode', undefined);
+  });
+
   it('toggles the torch', async () => {
     await renderScanner();
-    expect(mockCameraProps?.torchMode).toBe('off');
     await fireEvent.press(screen.getByText('Light on'));
     expect(mockCameraProps?.torchMode).toBe('on');
     await fireEvent.press(screen.getByText('Light off'));
     expect(mockCameraProps?.torchMode).toBe('off');
+  });
+
+  it('turns the light button off when the scan stops the camera', async () => {
+    await renderScanner({ requiredAgreement: 1, agreementWindow: 1 });
+    await fireEvent.press(screen.getByText('Light on'));
+    await sendFrame();
+    expect(mockCameraProps?.isActive).toBe(false);
+    expect(mockCameraProps?.torchMode).toBeUndefined();
+    expect(screen.getByText('Light on')).toBeTruthy();
+  });
+
+  it('ignores canceled camera commands', async () => {
+    const onError = jest.fn();
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    await renderScanner({ onError });
+    await act(() =>
+      mockCameraProps?.onError(
+        new Error(
+          'androidx.camera.core.CameraControl$OperationCanceledException: Camera is not active.'
+        )
+      )
+    );
+    expect(onError).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('passes other camera errors to onError', async () => {
+    const onError = jest.fn();
+    await renderScanner({ onError });
+    const error = new Error('Camera is in use by another app');
+    await act(() => mockCameraProps?.onError(error));
+    expect(onError).toHaveBeenCalledWith(error);
+  });
+
+  it('logs camera errors without onError', async () => {
+    const consoleError = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    await renderScanner();
+    const error = new Error('Camera is in use by another app');
+    await act(() => mockCameraProps?.onError(error));
+    expect(consoleError).toHaveBeenCalledWith(error);
+    consoleError.mockRestore();
   });
 
   it('hides the torch button on devices without a torch', async () => {

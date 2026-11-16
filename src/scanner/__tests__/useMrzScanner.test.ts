@@ -13,6 +13,7 @@ interface FrameOutputOptions {
   targetResolution: { width: number; height: number };
   pixelFormat: string;
   onFrame: (frame: FakeFrame) => void;
+  onFrameDropped: () => void;
 }
 
 interface FakeFrame {
@@ -80,6 +81,16 @@ describe('useMrzScanner', () => {
       height: 1920,
     });
     expect(mockFrameOutputOptions?.pixelFormat).toBe('yuv');
+  });
+
+  it('skips frames that arrive while busy without warnings', async () => {
+    const consoleWarn = jest
+      .spyOn(console, 'warn')
+      .mockImplementation(() => {});
+    await renderScanner();
+    mockFrameOutputOptions?.onFrameDropped();
+    expect(consoleWarn).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
   });
 
   it('reports the result once, after three frames agree, and then pauses', async () => {

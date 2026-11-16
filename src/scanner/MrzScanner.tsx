@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
   type Ref,
@@ -22,6 +23,7 @@ import {
   useCameraPermission,
 } from 'react-native-vision-camera';
 import { isValidRegion } from '../recognizer/options';
+import { isCanceledCameraOperation } from './cameraErrors';
 import {
   computePassportGuide,
   frameRectToViewRect,
@@ -58,7 +60,10 @@ export interface MrzScannerHandle {
 export interface MrzScannerProps {
   /** Called once, when a valid MRZ has been confirmed. Scanning then stops. */
   onResult: (result: MrzScanResult) => void;
-  /** Called when text recognition fails on a frame. */
+  /**
+   * Called when the camera or text recognition fails. Without it, camera
+   * errors are logged with `console.error`.
+   */
   onError?: (error: Error) => void;
   /**
    * Set to `false` to pause the camera, e.g. while the screen is not visible.
@@ -117,7 +122,10 @@ export function MrzScanner({
   const device = useCameraDevice('back');
   const [viewSize, setViewSize] = useState<Size>();
   const [frameSize, setFrameSize] = useState<Size>();
-  const [isTorchOn, setIsTorchOn] = useState(false);
+  // Undefined until the user first uses the light: Android rejects torch
+  // commands sent before the camera has started.
+  const [torchMode, setTorchMode] = useState<'on' | 'off'>();
+  const isTorchOn = torchMode === 'on';
 
   useEffect(() => {
     if (canRequestPermission) {
@@ -143,8 +151,32 @@ export function MrzScanner({
     return isValidRegion(region) ? region : DEFAULT_SCAN_REGION;
   }, [guide, viewSize, frameSize]);
 
+  // The latest callbacks, without restarting the camera when they change.
+  const callbacks = useRef({ onResult, onError });
+  useEffect(() => {
+    callbacks.current = { onResult, onError };
+  });
+
+  const handleResult = useCallback((result: MrzScanResult) => {
+    // The camera stops after a scan, which turns the light off.
+    setTorchMode(undefined);
+    callbacks.current.onResult(result);
+  }, []);
+
+  const handleCameraError = useCallback((error: Error) => {
+    if (isCanceledCameraOperation(error)) {
+      return;
+    }
+    const report = callbacks.current.onError;
+    if (report === undefined) {
+      console.error(error);
+    } else {
+      report(error);
+    }
+  }, []);
+
   const scanner = useMrzScanner({
-    onResult,
+    onResult: handleResult,
     onError,
     regionOfInterest,
     isActive: isActive && hasPermission,
@@ -203,7 +235,8 @@ export function MrzScanner({
         device={device}
         isActive={isActive && status !== 'done'}
         outputs={[scanner.frameOutput]}
-        torchMode={hasTorch && isTorchOn ? 'on' : 'off'}
+        torchMode={hasTorch ? torchMode : undefined}
+        onError={handleCameraError}
       />
       {guide !== undefined && <GuideOverlay guide={guide} status={status} />}
       {showMrzBoxes &&
@@ -242,7 +275,7 @@ export function MrzScanner({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ checked: isTorchOn }}
-          onPress={() => setIsTorchOn((on) => !on)}
+          onPress={() => setTorchMode(isTorchOn ? 'off' : 'on')}
           style={styles.torchButton}
         >
           <Text style={styles.torchText}>

@@ -166,6 +166,9 @@ export function useMrzScanner(
     // ML Kit and Apple Vision read YUV buffers directly.
     pixelFormat: 'yuv',
     onFrame: processFrame,
+    // Frames that arrive while text is still being read are skipped on
+    // purpose. Without this, VisionCamera warns about each one.
+    onFrameDropped: ignoreDroppedFrame,
   });
 
   const reset = useCallback(() => {
@@ -175,6 +178,8 @@ export function useMrzScanner(
 
   return { frameOutput, state, reset };
 }
+
+function ignoreDroppedFrame(): void {}
 
 /**
  * Applies a frame's update, keeping unchanged parts (and the whole state when
