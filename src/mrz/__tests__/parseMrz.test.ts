@@ -267,6 +267,8 @@ describe('parseMrz (TD3 passports)', () => {
       [{ nationality: '<<<' }, 'INVALID_VALUE:nationality'],
       [{ nationality: 'G<R' }, 'INVALID_VALUE:nationality'],
       [{ issuingState: '<<<' }, 'INVALID_VALUE:issuingState'],
+      [{ issuingState: 'DEL' }, 'UNKNOWN_CODE:issuingState'],
+      [{ nationality: 'QQQ' }, 'UNKNOWN_CODE:nationality'],
       [{ documentCode: 'P7' }, 'INVALID_VALUE:documentCode'],
       [{ documentNumber: '' }, 'INVALID_VALUE:documentNumber'],
       [{ name: '<<ANNA' }, 'INVALID_VALUE:surname'],
@@ -277,6 +279,16 @@ describe('parseMrz (TD3 passports)', () => {
       expect(result.valid).toBe(false);
       expect(issueSummary(result)).toEqual([expected]);
     });
+
+    it.each(['PAK', 'GBR', 'D<<', 'GBD', 'RKS', 'XXA', 'UNO'])(
+      'accepts the known state code %s',
+      (code) => {
+        const result = expectSuccess(
+          parse(buildTd3({ issuingState: code, nationality: code }))
+        );
+        expect(result.valid).toBe(true);
+      }
+    );
 
     it('accepts a holder with only one name', () => {
       const result = expectSuccess(parse(buildTd3({ name: 'NEWTON' })));

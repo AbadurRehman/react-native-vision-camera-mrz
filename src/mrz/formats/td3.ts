@@ -4,12 +4,14 @@
  *   P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<
  *   L898902C36UTO7408122F1204159ZE184226B<<<<<10
  */
+import { isKnownStateCode } from '../countryCodes';
 import { parseMrzDate } from '../dates';
 import { parseFailure } from '../errors';
 import {
   fieldLabel,
   isValidName,
   readCode,
+  type FieldValue,
   readRequiredValue,
   readSex,
   stripTrailingFillers,
@@ -26,6 +28,8 @@ import {
 import { parseMrzName } from '../names';
 import type { MrzFields, MrzIssue, MrzParseResult } from '../types';
 import type { MrzFormatDefinition, ParseContext } from './definition';
+
+export const TD3_LINE_LENGTH = 44;
 
 const PASSPORT_DOCUMENT_CODE = 'P';
 const DOCUMENT_CODE_PATTERN = /^P[A-Z<]$/;
@@ -125,15 +129,27 @@ function parseTd3(
       field,
       message: `The ${fieldLabel(field)} is not a real calendar date.`,
     });
+  const checkStateCode = (
+    field: 'issuingState' | 'nationality',
+    code: FieldValue<string>
+  ) => {
+    if (!code.valid) {
+      invalidValue(field);
+    } else if (!isKnownStateCode(code.value)) {
+      issues.push({
+        code: 'UNKNOWN_CODE',
+        field,
+        message: `The ${fieldLabel(field)} is not a known country or organization code.`,
+      });
+    }
+  };
 
   if (!DOCUMENT_CODE_PATTERN.test(rawDocumentCode)) {
     invalidValue('documentCode');
   }
 
   const issuingState = readCode(read(FIELDS.issuingState));
-  if (!issuingState.valid) {
-    invalidValue('issuingState');
-  }
+  checkStateCode('issuingState', issuingState);
 
   const name = parseMrzName(read(FIELDS.name));
   if (!isValidName(name.surname, true)) {
@@ -149,9 +165,7 @@ function parseTd3(
   }
 
   const nationality = readCode(read(FIELDS.nationality));
-  if (!nationality.valid) {
-    invalidValue('nationality');
-  }
+  checkStateCode('nationality', nationality);
 
   const dateOfBirth = parseMrzDate(
     read(FIELDS.dateOfBirth),
@@ -215,6 +229,18 @@ function parseTd3(
 export const td3: MrzFormatDefinition = {
   format: 'TD3',
   lineCount: 2,
-  lineLength: 44,
+  lineLength: TD3_LINE_LENGTH,
   parse: parseTd3,
 };
+
+/**
+ * `true` when every check digit on a TD3 second line matches. All check digits
+ * live on line 2, so this can rank OCR repair candidates before parsing.
+ * The line must be 44 characters of A-Z, 0-9 and `<`.
+ */
+export function hasValidTd3CheckDigits(line2: string): boolean {
+  const lines = applyCorrections(['', line2], CORRECTIONS);
+  return evaluateCheckDigits(lines, CHECK_DIGITS).every(
+    (checkDigit) => checkDigit.valid
+  );
+}

@@ -18,9 +18,3 @@ internal fun MrzRect.requireValidRegionOfInterest() {
     "regionOfInterest must lie inside the frame (normalized 0-1)."
   }
 }
-
-internal fun MrzRect.containsCenterOf(other: MrzRect): Boolean {
-  val centerX = other.x + other.width / 2
-  val centerY = other.y + other.height / 2
-  return centerX >= x && centerX <= x + width && centerY >= y && centerY <= y + height
-}

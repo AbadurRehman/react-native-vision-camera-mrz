@@ -1,141 +1,99 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import {
-  Camera,
-  useCameraPermission,
-  useFrameOutput,
-} from 'react-native-vision-camera';
-import {
-  parseMrz,
-  useMrzTextRecognizer,
-  type MrzParseResult,
-  type MrzRect,
-  type MrzTextLine,
+  MrzScanner,
+  type MrzDate,
+  type MrzScanResult,
+  type MrzScannerHandle,
 } from 'react-native-vision-camera-mrz';
-import { scheduleOnRN } from 'react-native-worklets';
-
-/**
- * A full-width band in the lower part of the frame, where the MRZ sits when the
- * passport's data page fills the screen. On portrait phones the preview fills
- * the screen height exactly, so these vertical fractions match the overlay.
- */
-const SCAN_REGION: MrzRect = { x: 0, y: 0.55, width: 1, height: 0.3 };
-
-interface Scan {
-  lines: MrzTextLine[];
-  durationMs: number;
-}
 
 export default function App() {
-  const { hasPermission, canRequestPermission, requestPermission } =
-    useCameraPermission();
+  const scanner = useRef<MrzScannerHandle>(null);
+  const [result, setResult] = useState<MrzScanResult>();
+  const [showMrzBoxes, setShowMrzBoxes] = useState(true);
 
-  useEffect(() => {
-    if (canRequestPermission) requestPermission();
-  }, [canRequestPermission, requestPermission]);
-
-  if (!hasPermission) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.message}>Camera access is needed to scan.</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() =>
-            canRequestPermission ? requestPermission() : Linking.openSettings()
-          }
-        >
-          <Text style={styles.buttonText}>
-            {canRequestPermission ? 'Allow camera' : 'Open Settings'}
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return <ScannerScreen />;
-}
-
-function ScannerScreen() {
-  const recognizer = useMrzTextRecognizer({ regionOfInterest: SCAN_REGION });
-  const [scan, setScan] = useState<Scan>();
-
-  const frameOutput = useFrameOutput({
-    pixelFormat: 'yuv',
-    onFrame(frame) {
-      'worklet';
-      try {
-        const start = performance.now();
-        const lines = recognizer.recognizeText(frame);
-        scheduleOnRN(setScan, { lines, durationMs: performance.now() - start });
-      } finally {
-        frame.dispose();
-      }
-    },
-  });
-
-  const mrz = useMemo(
-    () => (scan === undefined ? undefined : parseMrz(pickMrzLines(scan.lines))),
-    [scan]
-  );
+  const scanAgain = () => {
+    setResult(undefined);
+    scanner.current?.reset();
+  };
 
   return (
     <View style={styles.container}>
-      <Camera
+      <MrzScanner
+        ref={scanner}
         style={StyleSheet.absoluteFill}
-        device="back"
-        isActive={true}
-        outputs={[frameOutput]}
+        onResult={setResult}
+        onError={(error) => console.warn('MRZ scanner error:', error.message)}
+        showMrzBoxes={showMrzBoxes}
+        fallback={<PermissionMessage />}
       />
-      <View pointerEvents="none" style={styles.scanRegion} />
-      <View style={styles.panel}>
-        <Text style={styles.status}>{describeMrz(mrz)}</Text>
-        {scan !== undefined && (
-          <>
-            <Text style={styles.meta}>
-              {scan.lines.length} line(s) · {Math.round(scan.durationMs)} ms
-            </Text>
-            {scan.lines.slice(-4).map((line, index) => (
-              <Text key={index} style={styles.line} numberOfLines={1}>
-                {line.text}
-              </Text>
-            ))}
-          </>
-        )}
-      </View>
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: showMrzBoxes }}
+        onPress={() => setShowMrzBoxes((show) => !show)}
+        style={styles.debugToggle}
+      >
+        <Text style={styles.debugToggleText}>
+          {showMrzBoxes ? 'Hide MRZ boxes' : 'Show MRZ boxes'}
+        </Text>
+      </Pressable>
+      {result !== undefined && (
+        <ResultCard result={result} onScanAgain={scanAgain} />
+      )}
     </View>
   );
 }
 
-/**
- * Naive pick for this demo: the last two long lines. Phase 4 replaces it with
- * proper MRZ detection and agreement across several frames.
- */
-function pickMrzLines(lines: readonly MrzTextLine[]): string[] {
-  return lines
-    .map((line) => line.text.replace(/\s/g, ''))
-    .filter((text) => text.length >= 40)
-    .slice(-2);
+function ResultCard({
+  result,
+  onScanAgain,
+}: {
+  result: MrzScanResult;
+  onScanAgain: () => void;
+}) {
+  const { fields } = result;
+  const rows: Array<[string, string]> = [
+    ['Surname', fields.surname],
+    ['Given names', fields.givenNames || '—'],
+    ['Document number', fields.documentNumber],
+    ['Nationality', fields.nationality],
+    ['Date of birth', formatDate(fields.dateOfBirth)],
+    ['Sex', fields.sex ?? '—'],
+    ['Date of expiry', formatDate(fields.dateOfExpiry)],
+    ['Issuing state', fields.issuingState],
+  ];
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>✓ Passport scanned</Text>
+      {rows.map(([label, value]) => (
+        <View key={label} style={styles.row}>
+          <Text style={styles.label}>{label}</Text>
+          <Text style={styles.value}>{value}</Text>
+        </View>
+      ))}
+      <Pressable style={styles.button} onPress={onScanAgain}>
+        <Text style={styles.buttonText}>Scan again</Text>
+      </Pressable>
+    </View>
+  );
 }
 
-function describeMrz(result: MrzParseResult | undefined): string {
-  if (result === undefined || !result.ok) {
-    return 'Fit the passport data page in the screen, MRZ inside the box';
-  }
-  if (!result.valid) {
-    return `MRZ read, ${result.issues.length} problem(s). Hold steady…`;
-  }
-  const { surname, givenNames, documentNumber } = result.fields;
-  return `✓ ${surname}, ${givenNames} · ${documentNumber}`;
+function PermissionMessage() {
+  return (
+    <View style={styles.center}>
+      <Text style={styles.message}>
+        Camera access is needed to scan passports.
+      </Text>
+      <Pressable style={styles.button} onPress={() => Linking.openSettings()}>
+        <Text style={styles.buttonText}>Open Settings</Text>
+      </Pressable>
+    </View>
+  );
 }
 
-const MONOSPACE = Platform.select({ ios: 'Menlo', default: 'monospace' });
+function formatDate(date: MrzDate): string {
+  return date.iso ?? date.raw;
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -150,51 +108,65 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   message: {
+    color: 'white',
     fontSize: 16,
     textAlign: 'center',
   },
+  debugToggle: {
+    position: 'absolute',
+    top: 60,
+    right: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  debugToggleText: {
+    color: 'white',
+    fontSize: 13,
+  },
+  card: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 32,
+    padding: 20,
+    gap: 8,
+    borderRadius: 16,
+    backgroundColor: 'white',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1e7e34',
+    marginBottom: 4,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  label: {
+    color: '#57606a',
+    fontSize: 14,
+  },
+  value: {
+    flexShrink: 1,
+    color: '#1f2328',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'right',
+  },
   button: {
-    backgroundColor: '#1f6feb',
-    paddingHorizontal: 20,
+    marginTop: 8,
+    alignItems: 'center',
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
+    backgroundColor: '#1f6feb',
   },
   buttonText: {
     color: 'white',
+    fontSize: 16,
     fontWeight: '600',
-  },
-  scanRegion: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: `${SCAN_REGION.y * 100}%`,
-    height: `${SCAN_REGION.height * 100}%`,
-    borderTopWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-  },
-  panel: {
-    position: 'absolute',
-    top: 64,
-    left: 16,
-    right: 16,
-    padding: 12,
-    gap: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  status: {
-    color: 'white',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  meta: {
-    color: '#c9d1d9',
-    fontSize: 12,
-  },
-  line: {
-    color: 'white',
-    fontFamily: MONOSPACE,
-    fontSize: 11,
   },
 });

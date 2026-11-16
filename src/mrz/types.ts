@@ -72,7 +72,15 @@ export interface MrzCheckDigit {
 }
 
 export type MrzIssueCode =
-  'CHECK_DIGIT_MISMATCH' | 'INVALID_DATE' | 'INVALID_VALUE';
+  | 'CHECK_DIGIT_MISMATCH'
+  | 'INVALID_DATE'
+  | 'INVALID_VALUE'
+  /**
+   * A well-formed issuing state or nationality that is not a known ICAO or
+   * ISO 3166 code. Usually an OCR or printing error; ignore this issue
+   * yourself if you need to accept codes newer than this library.
+   */
+  | 'UNKNOWN_CODE';
 
 /** A problem found in an MRZ that was read but did not fully validate. */
 export interface MrzIssue {
