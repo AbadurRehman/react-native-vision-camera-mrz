@@ -22,8 +22,8 @@ export interface MrzTextLine {
 
 export interface MrzTextRecognizerOptions {
   /**
-   * Only text inside this region is returned. On iOS the region also limits
-   * the area that is processed, which makes recognition faster.
+   * Only text inside this region is read: the frame is cropped to it before
+   * recognition, which also makes recognition faster.
    * Defaults to the whole frame.
    */
   regionOfInterest?: MrzRect;
