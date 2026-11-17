@@ -1,6 +1,6 @@
 {
   "name": "react-native-vision-camera-mrz",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "VisionCamera v5 frame processor plugin for fast, on-device MRZ scanning of passports",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
