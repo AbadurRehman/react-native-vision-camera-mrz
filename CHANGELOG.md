@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. This project follows [Semantic Versioning](https://semver.org).
 
-## 1.0.0
+## 0.2.0
 
 First release: on-device passport (TD3) MRZ scanning for VisionCamera v5.
 
